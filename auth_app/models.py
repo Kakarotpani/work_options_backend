@@ -6,6 +6,7 @@ from phonenumber_field.modelfields import PhoneNumberField
 # Create your models here.
 
 class User(AbstractUser):
+    
     username = None
     email = models.EmailField(unique=True, null=False, blank=False)
     phone = PhoneNumberField(max_length = 15, default = '+91', blank = True, null = True)
