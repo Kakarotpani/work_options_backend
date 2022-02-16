@@ -1,4 +1,5 @@
 from distutils.command.upload import upload
+from pickle import TRUE
 from django.db import models
 from auth_app.models import User
 from client.models import Jobs
@@ -14,7 +15,7 @@ class Freelancer(models.Model):
     qualification = models.CharField(max_length=60, blank=True, null=True)
     experience = models.FloatField(blank=True, null=True)    
     photo = models.ImageField(upload_to='freelancerimg', blank=True, null=True)
-    contribution = models.IntegerField(null=True, blank=True)
+    contribution = models.IntegerField(null=True, blank=True, default=0)
     is_verified = models.BooleanField(default = False)
     ratings = models.IntegerField(null=True, blank=True)
 
@@ -40,7 +41,7 @@ class Bids(models.Model):
     freelancer = models.ForeignKey(Freelancer, on_delete=models.CASCADE, null=False, blank=False)
     amount = models.IntegerField(null=False, blank=False)
     about = models.CharField(max_length=30, blank=True, null=True)
-    bid_date = models.DateTimeField(auto_now_add=True,null=False, blank=False)
+    bid_date = models.DateField(auto_now_add=True,null=False, blank=False)
 
     def __str__(self):
         return self.job.title
@@ -48,7 +49,11 @@ class Bids(models.Model):
 class Contract(models.Model):
     job = models.OneToOneField(Jobs, on_delete=models.CASCADE, null=False, blank=False)
     freelancer = models.ForeignKey(Freelancer, on_delete=models.CASCADE, null=False, blank=False)
-    start_date = models.DateTimeField(null= True, blank=True)
-    end_date = models.DateTimeField(null= True, blank=True)
-    subbmitted = models.BooleanField(default= False)
+    start_date = models.DateField(auto_now_add=True,null= True, blank=True)
+    end_date = models.DateField(null= True, blank=True)
+    submitted = models.BooleanField(default= False)
     review = models.CharField(max_length= 100, null=True, blank=True)
+
+    def __str__(self):
+        return self.job.title+"- "+self.freelancer.user.first_name
+    

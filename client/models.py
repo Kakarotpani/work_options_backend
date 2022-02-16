@@ -12,7 +12,7 @@ class Client(models.Model):
     company = models.CharField(max_length= 30, null= True, blank=True)
     experience = models.FloatField(blank=True, null=True)
     photo = models.ImageField(upload_to= 'clientimg', blank= True, null= True)
-    contribution = models.IntegerField(null=True, blank=True)
+    contribution = models.IntegerField(null=True, blank=True, default=0)
     is_verified = models.BooleanField(default = False)
 
     def __str__(self):
@@ -24,7 +24,8 @@ class Jobs(models.Model):
     description = models.TextField(max_length= 120, blank=False, null=False)
     duration = models.IntegerField(blank= True, null=True)
     max_pay = models.FloatField(blank= False, null=False)
-    post_date = models.DateTimeField(auto_now_add=True, null=False, blank=False)    
+    post_date = models.DateField(auto_now_add=True, null=False, blank=False)
+    is_finished = models.BooleanField(default=False)    
     
     def __str__(self):
         return self.title    
