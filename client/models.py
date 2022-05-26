@@ -10,7 +10,6 @@ class Client(models.Model):
     sex = models.CharField(max_length = 6, blank=False, null=False)
     location = models.CharField(max_length = 30, null = False, blank = False)    
     company = models.CharField(max_length= 30, null= True, blank=True)
-    experience = models.FloatField(blank=True, null=True)
     photo = models.ImageField(upload_to= 'clientimg', blank= True, null= True)
     contribution = models.IntegerField(null=True, blank=True, default=0)
     is_verified = models.BooleanField(default = False)
@@ -19,9 +18,9 @@ class Client(models.Model):
         return self.user.email
     
 class Jobs(models.Model):
-    client = models.ForeignKey(Client, on_delete=models.CASCADE)    
+    client = models.ForeignKey(Client, on_delete=models.CASCADE)  
     title = models.CharField(max_length= 60, blank=False, null=False)
-    description = models.TextField(max_length= 120, blank=False, null=False)
+    description = models.TextField(max_length= 400, blank=False, null=False)
     duration = models.IntegerField(blank= True, null=True)
     max_pay = models.FloatField(blank= False, null=False)
     post_date = models.DateField(auto_now_add=True, null=False, blank=False)
@@ -32,7 +31,7 @@ class Jobs(models.Model):
     
 class Job_skills(models.Model):
     job = models.ForeignKey(Jobs, on_delete= models.CASCADE)
-    skill = models.CharField(max_length=10, blank=True, null=True)
+    skill = models.CharField(max_length=16, blank=True, null=True)
 
     def __str__(self):
         return self.skill

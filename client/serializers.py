@@ -1,26 +1,41 @@
 from rest_framework_simplejwt.serializers import serializers
 from freelancer.models import Contract
 from .models import *
+import ast
 
-class ClientSerializer(serializers.HyperlinkedModelSerializer):  
+class ClientSerializer(serializers.ModelSerializer): 
     class Meta:
         model = Client
-        fields = ['sex', 'location', 'company', 'experience', 'photo']  
+        fields = ['sex', 'location', 'company', 'photo']  
 
     def create(self, validated_data):
         user = self.context.get('user')
         sex = validated_data.get('sex')
         location = validated_data.get('location')
         company = validated_data.get('company')
-        experience = validated_data.get('experience')
-        photo = validated_data.get('photo', None)        
-    
-        client = Client(user=user, sex=sex, location=location, company=company, experience=experience, photo=photo)
+        photo = validated_data.get('photo', None)  
+        client = Client(user=user, sex=sex, location=location, company=company, photo=photo)
         client.save()
-        return client     
+        return client
+
+class UserUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ['first_name', 'last_name', 'email', 'phone']
+
+    def create(self, validated_data):
+        user= validated_data.get('user')
+        first_name = validated_data.get('first_name')
+        last_name = validated_data.get('last_name')
+        email = validated_data.get('email')
+        phone = validated_data.get('phone')
+        user_obj = User(id=user.id, first_name = first_name, last_name= last_name, email= email, phone= phone, is_client = True)
+        user_obj.save()
+        return user_obj
 
 class JobSerializer(serializers.ModelSerializer):
-    skill = serializers.ListField(child = serializers.CharField())  
+    #skill = serializers.ListField(child = serializers.CharField())  
+    skill = serializers.CharField()
     class Meta:
         model = Jobs        
         fields = ['title', 'description', 'duration', 'max_pay', 'skill']
@@ -30,14 +45,16 @@ class JobSerializer(serializers.ModelSerializer):
         title = validated_data.get('title')
         description = validated_data.get('description')
         duration = validated_data.get('duration')
-        max_pay = validated_data.get('max_pay')  
-        skill_data = validated_data.get('skill')        
+        max_pay = validated_data.get('max_pay') 
+        skills_get = validated_data.get('skill')
+        skills = ast.literal_eval(skills_get)      
         client = Client.objects.get(user=user)
         
         job = Jobs(client=client, title=title, description=description, duration=duration, max_pay=max_pay)      
-        job.save()        
-        for skill in skill_data:
-            Job_skills.objects.create(job=job, skill=skill)                
+        job.save()
+        for skill in skills:
+            print("Skill -----", skill)
+            Job_skills.objects.create(job=job, skill=skill)
         return job
 
 class HistorySerializer(serializers.ModelSerializer):
@@ -59,6 +76,7 @@ class HistorySerializer(serializers.ModelSerializer):
         freelancer = contract.freelancer
         freelancer.ratings = ratings
         freelancer.is_verified =True
+        
         contribution = freelancer.contribution
         if not contribution: 
             freelancer.contribution = 1

@@ -21,5 +21,5 @@ urlpatterns = [
     path('history/get', History.as_view()),
     path('bid/profile/get/<int:id>', ClientProfile.as_view()),
     path('recommend/get', Recommend.as_view()),
-    path('search/get', Search.as_view()),
+    path('search/post', Search.as_view()),
 ]

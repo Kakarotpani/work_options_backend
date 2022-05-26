@@ -14,7 +14,7 @@ from auth_app.custom_permissions import *
 from django.db.models import Q
 from django.shortcuts import get_object_or_404
 
-# Create your views here.
+# Business Logics
 
 class ClientProfile(GenericAPIView):
     permission_classes = [IsAuthenticated, IsClient]
@@ -28,15 +28,15 @@ class ClientProfile(GenericAPIView):
             serializer.save()           
             return Response({              
                 'data': 'updated profile Successfully !!',
-                'status' : status.HTTP_201_CREATED })
+                'status' : status.HTTP_200_OK })
         else:
             return Response({'data': 'Invalid Form !!', 'status': status.HTTP_400_BAD_REQUEST})
 
     def get(self, request):        
         user = request.user
         try:            
-            client= Client.objects.get(user=user)    
-            photo_url = "http://localhost:8000/media/"                    
+            client= Client.objects.get(user=user)   
+            #photo_url = "http://localhost:8000/media/"                    
             payload = {
                 'id': user.id,
                 'first_name': user.first_name,
@@ -46,8 +46,7 @@ class ClientProfile(GenericAPIView):
                 'sex': client.sex,
                 'location': client.location,
                 'company': client.company,
-                'experience': client.experience,
-                'photo': photo_url + str(client.photo),
+                'photo': str(client.photo),
                 'contribution': client.contribution,
                 'is_verified': client.is_verified,            
             }
@@ -58,14 +57,15 @@ class ClientProfile(GenericAPIView):
     def put(self, request):
         user= request.user
         client= Client.objects.get(user=user)
+        print(request.data)
         serializer = ClientSerializer(instance=client, data= request.data, context= {'user':user})
-        if serializer.is_valid():    
-            serializer.save()           
-            return Response({              
-                'data': 'updated profile Successfully !!',
-                'status' : status.HTTP_201_CREATED })
+        user_serializer = UserUpdateSerializer(instance=user, data= request.data, context= {'user':user})
+        if serializer.is_valid() and user_serializer.is_valid():
+            serializer.save()
+            user_serializer.save()
+            return Response(data= 'updated profile Successfully !!', status= status.HTTP_200_OK)
         else:
-            return Response({'data': 'Invalid Form !!', 'status': status.HTTP_400_BAD_REQUEST})
+            return Response(data= 'Invalid Form !!', status= status.HTTP_400_BAD_REQUEST)
 
     def delete(self, request):
         try:
@@ -82,23 +82,21 @@ class JobCrud(GenericAPIView):
     # add job
     def post(self, request):
         user = request.user
-        client = Client.objects.get(user=user)
-        if Jobs.objects.filter(client=client).exists():
+        print("request   ----", request.data)
+        """ if Jobs.objects.filter(client=client).exists():
             return Response(data="Upgrade acount to add multiple jobs", status=status.HTTP_406_NOT_ACCEPTABLE)
+        else: """
+        serializer = JobSerializer(context= {'user':user}, data= request.data)    
+        if serializer.is_valid():     
+            serializer.save()
+            return Response(data='Job added Successfully !!',status= status.HTTP_200_OK )
         else:
-            serializer = JobSerializer(context= {'user':user}, data= request.data)     
-            if serializer.is_valid():     
-                serializer.save()
-                return Response({              
-                    'data': 'Job added Successfully !!',
-                    'status' : status.HTTP_200_OK })
-            else:
-                return Response(data= 'Invalid Form !!', status= status.HTTP_400_BAD_REQUEST)
+            return Response(data= 'Invalid Form !!', status= status.HTTP_400_BAD_REQUEST)
 
     # manage jobs
     def get(self, request):
         client = Client.objects.get(user= request.user)
-        jobs = Jobs.objects.filter(client= client)    
+        jobs = Jobs.objects.filter(Q(client=client) & Q(is_finished=False))    
         if jobs:
             payload= []  
             for job in jobs:          
@@ -108,7 +106,7 @@ class JobCrud(GenericAPIView):
                     skill_list = skill_list+[skills.skill]                             
                 payload = payload + [{
                     'id':job.id,
-                    'date':job.post_date,
+                    'post_date':job.post_date,
                     'title': job.title,
                     'description': job.description,
                     'duration': job.duration,
@@ -116,7 +114,7 @@ class JobCrud(GenericAPIView):
                     'skill': skill_list }] 
             return Response(data = payload, status= status.HTTP_200_OK)
         else:
-            return Response({'data': 'No jobs yet....', 'status': status.HTTP_200_OK})
+            return Response(data= 'No jobs yet....', status= status.HTTP_204_NO_CONTENT)
 
     def put(self, request, id):
         job = Jobs.objects.get(id= id)       
@@ -124,11 +122,9 @@ class JobCrud(GenericAPIView):
             instance=job, context= {'user': request.user}, data=request.data) 
         if serializer.is_valid():
             serializer.save()
-            return Response({              
-                'data': 'Job updated Successfully !!',
-                'status' : status.HTTP_200_OK })
+            return Response(data='Job updated Successfully !!', status = status.HTTP_200_OK)
         else:
-            return Response({'data': 'Invalid Form !!', 'status': status.HTTP_400_BAD_REQUEST})
+            return Response(data= 'Invalid Form !!', status= status.HTTP_400_BAD_REQUEST)
             
     def delete(self, request, id):      
         try:      
@@ -139,37 +135,64 @@ class JobCrud(GenericAPIView):
             return Response(data= 'Couldn\'t delete !!', status= status.HTTP_400_BAD_REQUEST)
 
 
+class JobSingleView(GenericAPIView):
+    permission_classes = [IsAuthenticated, IsClient]
+
+    def get(self, request, id):
+        job = Jobs.objects.get(id= id)
+        try:                                  
+            payload = {
+                'id':job.id,
+                'post_date':job.post_date,
+                'title': job.title,
+                'description': job.description,
+                'duration': job.duration,
+                'max_pay': job.max_pay,
+            }
+            return Response(data = payload, status= status.HTTP_200_OK)
+        except Exception as e:
+            return Response(data= "Error in finding the excat job", status=status.HTTP_404_NOT_FOUND)
+
 class Bid(GenericAPIView):
     permission_classes = [IsAuthenticated, IsClient]
 
     # pending requests
     def get(self, request): 
         client = Client.objects.get(user=request.user)
-        jobs = Jobs.objects.filter(client=client)    
-        if not jobs:    
+        rawJobs = Jobs.objects.filter(Q(client=client) & Q(is_finished=False))
+        jobs = []
+        for obj in rawJobs:
+            if not Contract.objects.filter(job=obj).exists():
+                jobs = jobs + [obj]
+        if not jobs:   
             return Response(data= "No jobs Yet", status=status.HTTP_204_NO_CONTENT)
         else:
-            for job in jobs:            
+            print("JOBS ----",jobs)
+            payload = []
+            for job in jobs:
                 bids = Bids.objects.filter(job=job)
-                if not bids:
-                    return Response({'data': 'No bids yet....', 'status': status.HTTP_204_NO_CONTENT})
-                else:
-                    payload = []
+                if bids:
+                    print("bids -----", bids)
                     for bid in bids:
-                        if not Contract.objects.filter(job=bid.job).exists():                        
-                            payload = payload + [{
-                                'job_id': bid.job.id,
-                                'bid_id': bid.id,
-                                'title': bid.job.title,
-                                'description': bid.job.description,
-                                'post_date': bid.job.post_date,
-                                'duration': bid.job.duration,
-                                'max_pay': bid.job.max_pay,
-                                'freelancer': bid.freelancer.user.first_name + " " + bid.freelancer.user.last_name,
-                                'amount':bid.amount,
-                                'about': bid.about,
-                                'bid_date': bid.bid_date }]
-                    return Response(data = payload, status= status.HTTP_200_OK)      
+                        print("bid -----", bid)                
+                        payload = payload + [{
+                            'job_id': bid.job.id,
+                            'bid_id': bid.id,
+                            'fid': bid.freelancer.id,
+                            'title': bid.job.title,
+                            'description': bid.job.description,
+                            'post_date': bid.job.post_date,
+                            'duration': bid.job.duration,
+                            'max_pay': bid.job.max_pay,
+                            'freelancer': bid.freelancer.user.first_name + " " + bid.freelancer.user.last_name,
+                            'amount':bid.amount,
+                            'about': bid.about,
+                            'bid_date': bid.bid_date
+                        }]
+                    print("payload ---- ",payload)
+                    return Response(data = payload, status= status.HTTP_200_OK)
+                else:
+                    return Response(data= "No bids yet....", status= status.HTTP_204_NO_CONTENT)
 
 
 class Contracts(GenericAPIView):
@@ -177,7 +200,7 @@ class Contracts(GenericAPIView):
 
     # select bid
     def post(self, request, id): 
-        bid = Bids.objects.get(id=id)        
+        bid = Bids.objects.get(id=id)       
         freelancer = bid.freelancer
         job = bid.job
         end_date = date.today() + datetime.timedelta(job.duration)
@@ -187,20 +210,28 @@ class Contracts(GenericAPIView):
             if Favourites.objects.filter(job=job).exists():
                 fav = Favourites.objects.get(job=job)
                 fav.delete()
-            return Response(data='contract initiated', status=status.HTTP_201_CREATED)
+            return Response(data='contract initiated', status=status.HTTP_200_OK)
         except Exception as e:
             return Response(data='something went wrong !!', status=status.HTTP_500_INTERNAL_SERVER_ERROR)  
 
     # current job
-    def get(self, request): 
+    def get(self, request):
         client = Client.objects.get(user=request.user)
-        jobs = Jobs.objects.filter(client=client)
+        jobs = Jobs.objects.filter(Q(client=client) & Q(is_finished=False))
+        print(jobs)
         payload = []
-        for job in jobs:
-            contract = get_object_or_404(Contract, job=job)
-            if contract:
-                bid = Bids.objects.get(Q(job=contract.job) & Q(freelancer=contract.freelancer))             
-                if not contract.submitted:
+        if not jobs:
+            return Response(data="NO job", status= status.HTTP_204_NO_CONTENT)
+        else:
+            for job in jobs:
+                contract = Contract.objects.get(Q(job=job) & Q(submitted=False))
+                #contract = get_object_or_404(Contract, job=job)
+                if not contract:
+                    return Response(data="NO contract", status= status.HTTP_204_NO_CONTENT)
+                else:
+                    print("contract inside --------------- ", contract)
+                    bid = Bids.objects.get(Q(job=contract.job) & Q(freelancer=contract.freelancer))
+                    print("bid : ",bid)
                     payload = payload + [{
                         'contract_id': contract.id,
                         'job_id': contract.job.id,
@@ -211,11 +242,12 @@ class Contracts(GenericAPIView):
                         'max_pay': contract.job.max_pay,
                         'freelancer': contract.freelancer.user.first_name+" "+contract.freelancer.user.last_name,
                         'email': contract.freelancer.user.email,
-                        'phone': contract.freelancer.user.phone,
+                        'phone': str(contract.freelancer.user.phone),
                         'selected_bid': bid.amount,
                         'start_date': contract.start_date,
-                        'deadline': contract.end_date }]
-                return Response(data=payload, status= status.HTTP_200_OK)
+                        'deadline': contract.end_date
+                    }]
+                    return Response(data=payload, status= status.HTTP_200_OK)
             
     def delete(self, request, id):
         try:
@@ -241,26 +273,31 @@ class History(GenericAPIView):
     # job history
     def get(self, request):
         client = Client.objects.get(user=request.user)
-        jobs = Jobs.objects.filter(client=client)
-        for job in jobs:
-            contracts = Contract.objects.filter(Q(job=job) & Q(submitted=True))
-            if contracts:
-                payload = []
-                for contract in contracts:
-                    bid = Bids.objects.get(Q(job=contract.job) & Q(freelancer=contract.freelancer))
-                    payload = payload + [{
-                        'job_id': contract.job.id,
-                        'title': contract.job.title,
-                        'description': contract.job.description,
-                        'post_date': contract.job.post_date,
-                        'submit_date': contract.end_date,
-                        'freelancer': contract.freelancer.user.first_name+" "+contract.freelancer.user.last_name,
-                        'bid': bid.amount,
-                        'review': contract.review,
-                    }]
-                return Response(data= payload, status= status.HTTP_200_OK)
-            else:
-                return Response(data= 'no jobs to show in History', status= status.HTTP_200_OK)
+        jobs = Jobs.objects.filter(Q(client=client) & Q(is_finished=True))
+        if not jobs:
+            return Response(data="NO job", status= status.HTTP_204_NO_CONTENT)
+        else:
+            payload = []
+            for job in jobs:
+                print("JOBS : ",job)
+                contract = Contract.objects.get(job=job)
+
+                print("CONTRACT : ",contract)
+
+                bid = Bids.objects.get(Q(job=contract.job) & Q(freelancer=contract.freelancer))
+                print("BID : ", bid)
+                payload = payload + [{
+                    'job_id': contract.job.id,
+                    'title': contract.job.title,
+                    'description': contract.job.description,
+                    'post_date': contract.job.post_date,
+                    'start_date': contract.start_date,
+                    'end_date': contract.end_date,
+                    'freelancer': contract.freelancer.user.first_name+" "+contract.freelancer.user.last_name,
+                    'bid': bid.amount,
+                    'review': contract.review,
+                }]
+            return Response(data= payload, status= status.HTTP_200_OK)                    
 
             
 class Freelancerprofile(GenericAPIView):
@@ -268,15 +305,13 @@ class Freelancerprofile(GenericAPIView):
 
     def get(self, request, id):
         try:  
-            photo_url = "http://localhost:8000/media/"                   
-            bid = Bids.objects.get(id=id)
-            freelancer = bid.freelancer 
+            freelancer = Freelancer.objects.get(id=id)
             skills = Skills.objects.filter(freelancer=freelancer) 
             skill_list=[]
             for skills in skills: 
                 skill_list = skill_list+ [{skills.id : skills.skill}]
             payload = {
-            'id': freelancer.user.id,
+            'id': freelancer.id,
             'first_name': freelancer.user.first_name,
             'last_name': freelancer.user.last_name,
             'email': freelancer.user.email,
@@ -287,11 +322,12 @@ class Freelancerprofile(GenericAPIView):
             'location': freelancer.location,
             'qualification': freelancer.qualification,
             'experience': freelancer.experience,
-            'photo': photo_url + str(freelancer.photo),
+            'photo': str(freelancer.photo),
             'contribution': freelancer.contribution,
             'is_verified': freelancer.is_verified,
             'ratings': freelancer.ratings,
             'skill': skill_list }
+            print(payload)
             return Response(data= payload, status= status.HTTP_200_OK, content_type="application/json")
         except Exception as e:
             return Response(data= 'Couldn\'t fetch !!', status= status.HTTP_400_BAD_REQUEST)
@@ -303,19 +339,22 @@ class Recommend(GenericAPIView):
     def get(self, request):
         client = Client.objects.get(user=request.user)
         jobs = Jobs.objects.filter(client=client)
+        payload = []
         if jobs:
             for job in jobs:
-                skills = Job_skills.objects.filter(job=job)
-                payload = []
+                skills = Job_skills.objects.filter(job=job) # all job skills
                 if skills:
                     for skill in skills:                
-                        if Skills.objects.filter(skill=skill.skill).exists():
+                        if Skills.objects.filter(skill__icontains=skill.skill).exists():
                             results = Skills.objects.filter(skill=skill.skill)                    
                             for result in results:
                                 payload = payload + [{
+                                    'fid': result.freelancer.id,
                                     'freelancer': result.freelancer.user.first_name+" "+result.freelancer.user.last_name, 
+                                    'tag': result.freelancer.tag,
                                     'email': result.freelancer.user.email,
                                     'contribution': result.freelancer.contribution,
+                                    'experience': result.freelancer.experience,
                                     'is_verified': result.freelancer.is_verified
                                 }]
                         else:
@@ -323,9 +362,12 @@ class Recommend(GenericAPIView):
                             send_list = []
                             for freelancer in freelancers:
                                 send_list = send_list+[{
+                                    'fid': freelancer.id,
                                     'freelancer': freelancer.user.first_name+" "+freelancer.user.last_name, 
+                                    'tag': freelancer.tag,
                                     'email': freelancer.user.email,
                                     'contribution': freelancer.contribution,
+                                    'experience': freelancer.experience,
                                     'is_verified': freelancer.is_verified                            
                                 }]
                             return Response(data=send_list, status= status.HTTP_200_OK)
@@ -335,10 +377,13 @@ class Recommend(GenericAPIView):
                     send_list = []
                     for freelancer in freelancers:
                         send_list = send_list+[{
-                            'freelancer': freelancer.freelancer.user.first_name+" "+freelancer.freelancer.user.last_name, 
-                            'email': freelancer.freelancer.user.email,
-                            'contribution': freelancer.freelancer.contribution,
-                            'is_verified': freelancer.freelancer.is_verified                    
+                            'fid': freelancer.id,
+                            'freelancer': freelancer.user.first_name+" "+freelancer.user.last_name,
+                            'tag': freelancer.tag, 
+                            'email': freelancer.user.email,
+                            'contribution': freelancer.contribution,
+                            'experience': freelancer.experience,
+                            'is_verified': freelancer.is_verified                    
                         }]
                     return Response(data=send_list, status= status.HTTP_200_OK)            
 
@@ -346,17 +391,24 @@ class Recommend(GenericAPIView):
 class Search(GenericAPIView):
     permission_classes = [IsAuthenticated, IsClient]
     
-    def get(self, request):
+    def post(self, request):
         search = request.data.get('search')
-        skill =  get_object_or_404(Skills, skill__icontains = search)
-        if skill:
-            payload = {
-                'freelancer': skill.freelancer.user.first_name+" "+skill.freelancer.user.last_name, 
-                'email': skill.freelancer.user.email,
-                'contribution': skill.freelancer.contribution,
-                'is_verified': skill.freelancer.is_verified 
-            }
+        skills =  Skills.objects.filter(skill__icontains = search)
+        payload = []
+        if skills:
+            for skill in skills:
+                payload = payload + [{
+                    'fid': skill.freelancer.id,
+                    'freelancer': skill.freelancer.user.first_name+" "+skill.freelancer.user.last_name, 
+                    'tag': skill.freelancer.tag,
+                    'email': skill.freelancer.user.email,
+                    'contribution': skill.freelancer.contribution,
+                    'experience': skill.freelancer.experience,
+                    'is_verified': skill.freelancer.is_verified 
+                }]
             return Response(data=payload, status=status.HTTP_200_OK)
+        else:
+            return Response(data=payload, status=status.HTTP_204_NO_CONTENT)
         
 
 

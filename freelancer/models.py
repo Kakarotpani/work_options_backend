@@ -1,5 +1,3 @@
-from distutils.command.upload import upload
-from pickle import TRUE
 from django.db import models
 from auth_app.models import User
 from client.models import Jobs
@@ -17,7 +15,7 @@ class Freelancer(models.Model):
     photo = models.ImageField(upload_to='freelancerimg', blank=True, null=True)
     contribution = models.IntegerField(null=True, blank=True, default=0)
     is_verified = models.BooleanField(default = False)
-    ratings = models.IntegerField(null=True, blank=True)
+    ratings = models.IntegerField(null=True, blank=True, default=1)
 
     def __str__(self):
         return self.user.email
@@ -40,7 +38,7 @@ class Bids(models.Model):
     job = models.ForeignKey(Jobs, on_delete=models.CASCADE, null=False, blank=False)
     freelancer = models.ForeignKey(Freelancer, on_delete=models.CASCADE, null=False, blank=False)
     amount = models.IntegerField(null=False, blank=False)
-    about = models.CharField(max_length=30, blank=True, null=True)
+    about = models.CharField(max_length=120, blank=True, null=True)
     bid_date = models.DateField(auto_now_add=True,null=False, blank=False)
 
     def __str__(self):
